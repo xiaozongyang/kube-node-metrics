@@ -1,5 +1,7 @@
 # README [Go To English Version](README.md)
 
+本项目遵守 MIT 协议。
+
 本项目灵感来源于 [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) 和 [kubectl](https://github.com/kubernetes/kubectl)。
 
 本项目实现了一个暴露 kubernetes 节点资源指标的服务，目前暴露的指标有：

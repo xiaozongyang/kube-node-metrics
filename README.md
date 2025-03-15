@@ -1,5 +1,7 @@
 # README [查看中文版](README-zh.md)
 
+This project is licensed under the MIT License.
+
 This project is inspired by [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) and [kubectl](https://github.com/kubernetes/kubectl).
 
 This project is exposted kubernetes node resource metrics to prometheus. Following Metrics will be exposed.
