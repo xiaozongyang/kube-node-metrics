@@ -1,4 +1,5 @@
 # Kube Node Metrics
+[中文版](README-zh.md)
 
 This project is inspired by [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) and [kubectl](https://github.com/kubernetes/kubectl).
 
@@ -16,6 +17,8 @@ These samples values should be equal to the result of `kubectl describe node <no
 
 ### Try in Minikube
 Please ensure you have [minikube](https://github.com/kubernetes/minikube) installed.
+
+Run with following commands in your terminal:
 ```
 minikube start
 kubectl apply -f deploy.yaml
@@ -26,7 +29,8 @@ kubectl apply -f deploy.yaml
 kubectl apply -f deploy.yaml
 ```
 
-### build manually
+## Build
+### build binary manually
 ```bash
 go build .
 ```
@@ -36,6 +40,9 @@ go build .
 docker build . -t <image>:<tag>
 ```
 
-# TODO
-1. support custom k8s api server address
+## Operating
+This exporter also exposed a metric `kube_node_metrics_last_full_sync_ok_time_seconds` which indicates the last full sync timestamp in seconds. You can create alert rule to monitor the exporter health with the expression `time() - kube_node_metrics_last_full_sync_ok_time_seconds > 300` and you will receive alert if the exporter is not sync sucessfully for 300 seconds.
+
+
+## TODO
 1. support exposed node labels match given pattern
