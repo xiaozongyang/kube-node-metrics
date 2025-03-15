@@ -24,3 +24,4 @@ go build .
 1. release with docker image
 1. support custom k8s api server address
 1. support mutiple arch docker iamges
+1. support exposed node labels match given pattern
