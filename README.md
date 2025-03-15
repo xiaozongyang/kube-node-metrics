@@ -13,15 +13,26 @@ kube_node_metrics_mem_limit_bytes
 These samples values should be equal to the result of `kubectl describe node <node>`.
 
 ## Getting started
-TODO: add docker image
+
+### Try in Minikube
+Please ensure you have [minikube](https://github.com/kubernetes/minikube) installed.
+```
+minikube start
+kubectl apply -f deploy.yaml
+```
+
+### Run in Kubernetes
+```bash
+kubectl apply -f deploy.yaml
+```
 
 ### build manually
 ```bash
 go build .
 ```
 
+### build with docker
+
 # TODO
-1. release with docker image
 1. support custom k8s api server address
-1. support mutiple arch docker iamges
 1. support exposed node labels match given pattern
