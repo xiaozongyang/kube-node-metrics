@@ -17,7 +17,7 @@ TODO: add docker image
 
 ### build manually
 ```bash
-go build 
+go build .
 ```
 
 # TODO
