@@ -1,5 +1,4 @@
-# Kube Node Metrics
-[中文版](README-zh.md)
+# README [查看中文版](README-zh.md)
 
 This project is inspired by [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) and [kubectl](https://github.com/kubernetes/kubectl).
 

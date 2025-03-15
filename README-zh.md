@@ -1,5 +1,4 @@
-# Kube Node Metrics
-[English Version](README.md)
+# README [Go To English Version](README.md)
 
 本项目灵感来源于 [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) 和 [kubectl](https://github.com/kubernetes/kubectl)。
 
@@ -40,4 +39,7 @@ docker build . -t <image>:<tag>
 ```
 
 ## 运维
-1. 支持暴露指定前缀的 k8s 节点标签
+本项目也暴露了一个 `kube_node_metrics_last_full_sync_ok_time_seconds` ata 指标，用于表示最后一次全量同步成功的时间。 根据这个指标可以配置报警，例如通过 `time() - kube_node_metrics_last_full_sync_ok_time_seconds > 300` 来通知已经 5 分钟没有同步成功的情况。
+
+## TODO
+1. 支持暴露节点 k8s 节点标签，范围通过前缀指定
