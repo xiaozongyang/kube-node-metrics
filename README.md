@@ -21,7 +21,6 @@ go build .
 ```
 
 # TODO
-1. integrate github CI
 1. release with docker image
 1. support custom k8s api server address
 1. support mutiple arch docker iamges
