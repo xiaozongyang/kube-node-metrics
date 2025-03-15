@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-node-metrics
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-node-metrics
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-node-metrics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-node-metrics
+subjects:
+- kind: ServiceAccount
+  name: kube-node-metrics
+  namespace: default
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-node-metrics
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-node-metrics
+  template:
+    metadata:
+      labels:
+        app: kube-node-metrics
+    spec:
+      serviceAccountName: kube-node-metrics
+      containers:
+      - name: kubep-node-metrics
+        image: docker.io/xiaozongyang/kube-node-metrics:latest
+        env:
+          - name: FULL_SYNC_INTERVAL
+            value: "2m"
+        ports:
+        - containerPort: 19191
+          name: metrics
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+      tolerations:
+      - operator: Exists
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-node-metrics
+  namespace: default
+  labels:
+    app: kube-node-metrics
+spec:
+  selector:
+    app: kube-node-metrics
+  ports:
+  - port: 19191
+    targetPort: 19191
+    name: metrics
