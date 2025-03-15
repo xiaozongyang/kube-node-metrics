@@ -28,7 +28,6 @@ kubectl apply -f deploy.yaml
 ```
 
 ### Run in Kubernetes
-
 ```bash
 kubectl apply -f deploy.yaml
 ```
