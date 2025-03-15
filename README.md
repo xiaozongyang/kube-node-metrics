@@ -14,7 +14,9 @@ kube_node_metrics_mem_limit_bytes
 
 These samples values should be equal to the result of `kubectl describe node <node>`.
 
+
 ## Getting started
+Available docker images can be fount in [docker hub](https://hub.docker.com/r/xiaozongyang/kube-node-metrics/tags).
 
 ### Try in Minikube
 Please ensure you have [minikube](https://github.com/kubernetes/minikube) installed.
@@ -26,6 +28,7 @@ kubectl apply -f deploy.yaml
 ```
 
 ### Run in Kubernetes
+
 ```bash
 kubectl apply -f deploy.yaml
 ```

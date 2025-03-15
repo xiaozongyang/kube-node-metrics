@@ -49,7 +49,7 @@ spec:
       serviceAccountName: kube-node-metrics
       containers:
       - name: kubep-node-metrics
-        image: docker.io/xiaozongyang/kube-node-metrics:latest
+        image: xiaozongyang/kube-node-metrics:latest
         env:
           - name: FULL_SYNC_INTERVAL
             value: "2m"
