@@ -31,7 +31,10 @@ kubectl apply -f deploy.yaml
 go build .
 ```
 
-### build with docker
+### build docker image
+```bash
+docker build . -t <image>:<tag>
+```
 
 # TODO
 1. support custom k8s api server address
