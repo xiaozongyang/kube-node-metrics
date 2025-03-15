@@ -15,6 +15,7 @@ kube_node_metrics_mem_limit_bytes
 本项目暴露出的资源申请(request)和限制()g(limit)的指标值应该和 `kubectl describe node <node>` 命令的结果相同。
 
 ## 快速开始
+本项目的 Docker 镜像可以在 [docker hub](https://hub.docker.com/r/xiaozongyang/kube-node-metrics/tags) 上找到。
 ### 在 Minikube 上试用
 请确保你已经安装了 [minikube](https://github.com/kubernetes/minikube)。
 
