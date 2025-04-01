@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -12,50 +13,16 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 var (
-	namespace    = "kube_node_metrics"
-	commonLabels = []string{"node", "ip"}
-
-	cpuRequests = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "cpu_reqeust",
-			Help:      "Total CPU requests of all pods running on the node",
-		},
-		commonLabels,
-	)
-
-	cpuLimits = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "cpu_limit",
-			Help:      "Total CPU limits of all pods running on the node",
-		},
-		commonLabels,
-	)
-
-	memRequests = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "memory_request_bytes",
-			Help:      "Total memory requests of all pods running on the node",
-		},
-		commonLabels,
-	)
-
-	memLimits = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "memory_limit_bytes",
-			Help:      "Total memory limits of all pods running on the node",
-		},
-		commonLabels,
-	)
+	namespace             = "kube_node_metrics"
+	metricNameCpuRequests = "cpu_requests"
+	metricNameCpuLimits   = "cpu_limits"
+	metricNameMemRequests = "mem_requests"
+	metricNameMemLimits   = "mem_limits"
 
 	lastFullSyncOkTimeSeconds = prometheus.NewGauge(
 		prometheus.GaugeOpts{
@@ -93,13 +60,8 @@ var (
 type nodeMeta struct {
 	ip   string
 	name string
-}
 
-type nodeMetrics struct {
-	cpuRequests prometheus.Gauge
-	cpuLimits   prometheus.Gauge
-	memRequests prometheus.Gauge
-	memLimits   prometheus.Gauge
+	labels map[string]string
 }
 
 type nodeResources struct {
@@ -108,9 +70,76 @@ type nodeResources struct {
 	memRequests float64
 	memLimits   float64
 
-	meta    *nodeMeta
-	metrics *nodeMetrics
+	meta *nodeMeta
 }
+
+type nodeResourceCollector struct {
+	name2nodeResources map[string]*nodeResources
+
+	rwMut sync.RWMutex
+}
+
+func (n *nodeResourceCollector) lockedUpdate(name2nodeResources map[string]*nodeResources) {
+	n.rwMut.Lock()
+	defer n.rwMut.Unlock()
+
+	n.name2nodeResources = name2nodeResources
+}
+
+// Collect implements prometheus.Collector.
+func (n *nodeResourceCollector) Collect(ch chan<- prometheus.Metric) {
+	n.rwMut.RLock()
+	defer n.rwMut.RUnlock()
+
+	for _, node := range n.name2nodeResources {
+		node.collect(ch)
+	}
+}
+
+func (nr *nodeResources) collect(ch chan<- prometheus.Metric) {
+	labels := nr.meta.labels
+
+	cpuRequest := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace:   namespace,
+		Name:        metricNameCpuRequests,
+		Help:        "Total CPU requests of all pods running on the node",
+		ConstLabels: labels,
+	})
+	cpuLimit := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace:   namespace,
+		Name:        metricNameCpuLimits,
+		Help:        "Total CPU limits of all pods running on the node",
+		ConstLabels: labels,
+	})
+	memRequest := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace:   namespace,
+		Name:        metricNameMemRequests,
+		Help:        "Total memory requests of all pods running on the node",
+		ConstLabels: labels,
+	})
+	memLimit := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace:   namespace,
+		Name:        metricNameMemLimits,
+		Help:        "Total memory limits of all pods running on the node",
+		ConstLabels: labels,
+	})
+
+	cpuRequest.Set(nr.cpuRequests)
+	cpuLimit.Set(nr.cpuLimits)
+	memRequest.Set(nr.memRequests)
+	memLimit.Set(nr.memLimits)
+
+	ch <- cpuRequest
+	ch <- cpuLimit
+	ch <- memRequest
+	ch <- memLimit
+}
+
+// Describe implements prometheus.Collector.
+func (n *nodeResourceCollector) Describe(chan<- *prometheus.Desc) {
+}
+
+var _ prometheus.Collector = &nodeResourceCollector{}
 
 var (
 	fullSyncInterval = 2 * time.Minute
@@ -120,10 +149,6 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(cpuRequests)
-	prometheus.MustRegister(cpuLimits)
-	prometheus.MustRegister(memRequests)
-	prometheus.MustRegister(memLimits)
 	prometheus.MustRegister(lastFullSyncOkTimeSeconds)
 	prometheus.MustRegister(fullSyncDurationSeconds)
 	prometheus.MustRegister(k8sApiLatencySeconds)
@@ -152,6 +177,8 @@ func main() {
 
 	log.Printf("Full sync interval: %v", fullSyncInterval)
 
+	collector := newNodeResourceCollector()
+
 	go func() {
 		// TODO: set timeout
 		ctx := context.Background()
@@ -159,7 +186,7 @@ func main() {
 		lastFullSyncOk := time.Now()
 
 		for {
-			err := syncFullMetrics(ctx, clientset)
+			err := collector.syncFullMetrics(ctx, clientset)
 			if err != nil {
 				log.Printf("Error collecting metrics: %v", err)
 			}
@@ -174,26 +201,24 @@ func main() {
 		}
 	}()
 
-	go watchNodes(clientset)
-
 	http.Handle("/metrics", promhttp.Handler())
 	log.Fatal(http.ListenAndServe(":19191", nil))
+}
+
+func newNodeResourceCollector() *nodeResourceCollector {
+	return &nodeResourceCollector{
+		name2nodeResources: make(map[string]*nodeResources),
+	}
 }
 
 func newNodeMeta(node *v1.Node) *nodeMeta {
 	return &nodeMeta{
 		ip:   getNodeIp(node),
 		name: node.Name,
-	}
-}
-
-func newNodeMetrics(meta *nodeMeta) *nodeMetrics {
-	labels := getNodeLabelValues(meta)
-	return &nodeMetrics{
-		cpuRequests: cpuRequests.WithLabelValues(labels...),
-		cpuLimits:   cpuLimits.WithLabelValues(labels...),
-		memRequests: memRequests.WithLabelValues(labels...),
-		memLimits:   memLimits.WithLabelValues(labels...),
+		labels: map[string]string{
+			"node": node.Name,
+			"ip":   getNodeIp(node),
+		},
 	}
 }
 
@@ -221,8 +246,7 @@ func getName2NodeResources(nodes []v1.Node) map[string]*nodeResources {
 func newNodeResource(node *v1.Node) *nodeResources {
 	meta := newNodeMeta(node)
 	return &nodeResources{
-		meta:    meta,
-		metrics: newNodeMetrics(meta),
+		meta: meta,
 	}
 }
 
@@ -290,7 +314,7 @@ func listPods(ctx context.Context, clientset *kubernetes.Clientset) ([]v1.Pod, e
 	return allPods, nil
 }
 
-func syncFullMetrics(ctx context.Context, clientset *kubernetes.Clientset) error {
+func (collector *nodeResourceCollector) syncFullMetrics(ctx context.Context, clientset *kubernetes.Clientset) error {
 	beg := time.Now()
 	defer func(beg time.Time) {
 		end := time.Now()
@@ -312,8 +336,8 @@ func syncFullMetrics(ctx context.Context, clientset *kubernetes.Clientset) error
 	}
 
 	updateResourcesByNode(allPods, name2nodeResources)
-	updateNodeMetrics(name2nodeResources)
 
+	collector.lockedUpdate(name2nodeResources)
 	return nil
 }
 
@@ -350,49 +374,5 @@ func updateResourcesByNode(pods []v1.Pod, n2r map[string]*nodeResources) {
 				res.memLimits += mem.AsApproximateFloat64()
 			}
 		}
-	}
-}
-
-func updateNodeMetrics(name2node map[string]*nodeResources) {
-	for _, node := range name2node {
-		node.metrics.cpuRequests.Set(node.cpuRequests)
-		node.metrics.cpuLimits.Set(node.cpuLimits)
-		node.metrics.memRequests.Set(node.memRequests)
-		node.metrics.memLimits.Set(node.memLimits)
-	}
-}
-
-func watchNodes(clientset *kubernetes.Clientset) {
-	watcher, err := clientset.CoreV1().Nodes().Watch(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		log.Fatalf("Error watching nodes: %v", err)
-	}
-
-	for event := range watcher.ResultChan() {
-		node, ok := event.Object.(*v1.Node)
-		if !ok {
-			continue
-		}
-
-		switch event.Type {
-		case watch.Deleted:
-			deleteNodeMetrics(node)
-		}
-	}
-}
-
-func deleteNodeMetrics(node *v1.Node) {
-	labelValues := getNodeLabelValues(newNodeMeta(node))
-
-	cpuRequests.DeleteLabelValues(labelValues...)
-	cpuLimits.DeleteLabelValues(labelValues...)
-	memRequests.DeleteLabelValues(labelValues...)
-	memLimits.DeleteLabelValues(labelValues...)
-}
-
-func getNodeLabelValues(meta *nodeMeta) []string {
-	return []string{
-		meta.name,
-		meta.ip,
 	}
 }
